@@ -1,13 +1,20 @@
 const express = require('express');
 const multer = require('multer');
+const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
+const path = require('path');
 
 const app = express();
 const port = 3000;
 
 // Servir archivos estáticos desde la carpeta 'public'
-app.use(express.static('public'));
+app.use(express.static(path.resolve(__dirname, 'public')));
+
+// Ruta principal para servir el archivo HTML
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Configurar Multer para la subida de imágenes
 const storage = multer.memoryStorage();
@@ -38,7 +45,7 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
         const pageHeight = 13 * pointsPerInch;
 
         // Configuración de imágenes
-        const imageWidth = (6.35 / 2.54) * pointsPerInch;
+        const imageWidth = (6.35 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
         const imageHeight = (8.8 / 2.54) * pointsPerInch;
         const spacing = (0.4 / 25.4) * pointsPerInch;
 
@@ -62,7 +69,6 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
                 yOffset = pageHeight - marginY - imageHeight;
             }
 
-            // Convertir la imagen a PNG con alta calidad y redimensionar si es necesario
             const imageBuffer = await sharp(req.files[i].buffer)
                 .resize({
                     width: Math.round(imageWidth),
@@ -90,17 +96,12 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
             }
         }
 
-        // Guardar el PDF en memoria y enviar al cliente
         const pdfBytes = await pdfDoc.save();
 
-        // Comprobación de longitud del archivo antes de enviarlo
-        console.log(`PDF generado, tamaño: ${pdfBytes.length} bytes`);
-
-        // Enviar el PDF directamente en la respuesta
+        // Enviar el PDF como respuesta
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename="output.pdf"');
         res.send(Buffer.from(pdfBytes));
-        
+
     } catch (err) {
         console.error('Error al generar el PDF:', err);
         res.status(500).send('Error al generar el PDF.');
