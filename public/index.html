@@ -1,62 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Images and Create PDF</title>
+    <title>Subida de Imágenes</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        #progress-container {
+            width: 100%;
+            background-color: #f3f3f3;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 20px;
+            background-color: #4caf50;
+        }
+
+        #progress-text {
             text-align: center;
-        }
-        #uploadForm {
-            margin-top: 50px;
-        }
-        .preview img {
-            width: 100px;
-            height: auto;
-            margin: 5px;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>Subir Imágenes y Crear PDF</h1>
+    <h1>Subir Imágenes</h1>
     <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" id="images" name="images" multiple accept="image/*">
-        <button type="button" onclick="uploadImages()">Subir y Crear PDF</button>
+        <input type="file" name="images" id="imageInput" multiple accept="image/*">
+        <button type="submit">Subir y Generar PDF</button>
     </form>
-    <div class="preview" id="preview"></div>
+
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+    </div>
+    <div id="progress-text">0%</div>
 
     <script>
-        function uploadImages() {
-            const images = document.getElementById('images').files;
-
-            if (images.length === 0) {
-                alert('Debes subir al menos una imagen.');
-                return;
-            }
-
+        document.getElementById('uploadForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            
             const formData = new FormData();
-            for (let i = 0; i < images.length; i++) {
-                formData.append('images', images[i]);
+            const files = document.getElementById('imageInput').files;
+
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
             }
 
-            // Aquí insertas el código fetch para enviar las imágenes al servidor
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.blob())
-            .then(blob => {
-                const url = window.URL.createObjectURL(new Blob([blob]));
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'output.pdf';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            })
-            .catch(error => console.error('Error:', error));
+            const xhr = new XMLHttpRequest();
+
+            // Actualizar la barra de progreso para la subida de archivos
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    document.getElementById('progress-bar').style.width = percentComplete + '%';
+                    document.getElementById('progress-text').innerText = Math.round(percentComplete) + '% Subido';
+                }
+            });
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    // Iniciar el progreso de la generación del PDF
+                    simulatePdfGenerationProgress();
+                    const link = document.createElement('a');
+                    link.href = '/output.pdf';
+                    link.download = 'output.pdf';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            };
+
+            xhr.open('POST', '/upload', true);
+            xhr.send(formData);
+        });
+
+        // Simulación de progreso para la generación del PDF
+        function simulatePdfGenerationProgress() {
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 10;
+                document.getElementById('progress-bar').style.width = progress + '%';
+                document.getElementById('progress-text').innerText = progress + '% Generando PDF';
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    document.getElementById('progress-text').innerText = 'PDF Generado!';
+                }
+            }, 500); // Incremento simulado cada 500ms
         }
     </script>
 </body>
