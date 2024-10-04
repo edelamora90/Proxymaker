@@ -36,14 +36,18 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
         // Crear un nuevo documento PDF
         const pdfDoc = await PDFDocument.create();
 
-        // Tamaño de página en pulgadas (19x13)
-        const pageWidth = 19 * 72;
-        const pageHeight = 13 * 72;
+        // Aumentar el DPI para mejorar la calidad (300 DPI)
+        const dpi = 300;
+        const pointsPerInch = dpi; // 1 pulgada = dpi puntos
+
+        // Tamaño de página en puntos (19x13 pulgadas a 300 DPI)
+        const pageWidth = 19 * pointsPerInch;
+        const pageHeight = 13 * pointsPerInch;
 
         // Configuración de imágenes
-        const imageWidth = (6.35 / 2.54) * 72;  // Convertir cm a puntos
-        const imageHeight = (8.8 / 2.54) * 72;  // Convertir cm a puntos
-        const spacing = (0.4 / 25.4) * 72;      // Espacio en puntos (1mm)
+        const imageWidth = (6.35 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
+        const imageHeight = (8.8 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
+        const spacing = (0.4 / 25.4) * pointsPerInch;      // Espacio en puntos (1mm)
 
         const imagesPerRow = 7;
         const rowsPerPage = 3;
@@ -67,12 +71,18 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
                 yOffset = pageHeight - marginY - imageHeight;
             }
 
-            // Convertir la imagen a PNG y agregar al PDF
+            // Convertir la imagen a PNG con alta calidad y redimensionar si es necesario
             const imageBuffer = await sharp(req.files[i].buffer)
-                .resize({ width: Math.round(imageWidth), height: Math.round(imageHeight) })
-                .png()
+                .resize({
+                    width: Math.round(imageWidth),
+                    height: Math.round(imageHeight),
+                    fit: 'inside', // Asegura que la imagen mantenga su aspecto dentro de los límites dados
+                    kernel: sharp.kernel.lanczos3 // Filtro de alta calidad para redimensionado
+                })
+                .png({ quality: 100, compressionLevel: 0 })  // Calidad máxima y sin compresión
                 .toBuffer();
 
+            // Embeder la imagen PNG en el PDF
             const image = await pdfDoc.embedPng(imageBuffer);
             const page = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
             page.drawImage(image, {
