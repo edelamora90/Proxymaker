@@ -1,20 +1,13 @@
 const express = require('express');
 const multer = require('multer');
-const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
-const path = require('path');
 
 const app = express();
 const port = 3000;
 
 // Servir archivos estáticos desde la carpeta 'public'
-app.use(express.static(path.resolve(__dirname, 'public')));
-
-// Ruta principal para servir el archivo HTML
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.use(express.static('public'));
 
 // Configurar Multer para la subida de imágenes
 const storage = multer.memoryStorage();
@@ -38,26 +31,24 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
 
         // Aumentar el DPI para mejorar la calidad (300 DPI)
         const dpi = 300;
-        const pointsPerInch = dpi; // 1 pulgada = dpi puntos
+        const pointsPerInch = dpi;
 
         // Tamaño de página en puntos (19x13 pulgadas a 300 DPI)
         const pageWidth = 19 * pointsPerInch;
         const pageHeight = 13 * pointsPerInch;
 
         // Configuración de imágenes
-        const imageWidth = (6.35 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
-        const imageHeight = (8.8 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
-        const spacing = (0.4 / 25.4) * pointsPerInch;      // Espacio en puntos (1mm)
+        const imageWidth = (6.35 / 2.54) * pointsPerInch;
+        const imageHeight = (8.8 / 2.54) * pointsPerInch;
+        const spacing = (0.4 / 25.4) * pointsPerInch;
 
         const imagesPerRow = 7;
         const rowsPerPage = 3;
         const totalImagesPerPage = imagesPerRow * rowsPerPage;
 
-        // Calcular el espacio total ocupado por las imágenes más el espaciado
         const totalImageWidth = (imagesPerRow * imageWidth) + ((imagesPerRow - 1) * spacing);
         const totalImageHeight = (rowsPerPage * imageHeight) + ((rowsPerPage - 1) * spacing);
 
-        // Calcular los márgenes para centrar las imágenes
         const marginX = (pageWidth - totalImageWidth) / 2;
         const marginY = (pageHeight - totalImageHeight) / 2;
 
@@ -76,13 +67,12 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
                 .resize({
                     width: Math.round(imageWidth),
                     height: Math.round(imageHeight),
-                    fit: 'inside', // Asegura que la imagen mantenga su aspecto dentro de los límites dados
-                    kernel: sharp.kernel.lanczos3 // Filtro de alta calidad para redimensionado
+                    fit: 'inside',
+                    kernel: sharp.kernel.lanczos3
                 })
-                .png({ quality: 100, compressionLevel: 0 })  // Calidad máxima y sin compresión
+                .png({ quality: 100, compressionLevel: 0 })
                 .toBuffer();
 
-            // Embeder la imagen PNG en el PDF
             const image = await pdfDoc.embedPng(imageBuffer);
             const page = pdfDoc.getPages()[pdfDoc.getPageCount() - 1];
             page.drawImage(image, {
@@ -100,18 +90,19 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
             }
         }
 
-        // Guardar el PDF
+        // Guardar el PDF en memoria y enviar al cliente
         const pdfBytes = await pdfDoc.save();
-        const outputFilePath = path.join(__dirname, 'output.pdf');
-        fs.writeFileSync(outputFilePath, pdfBytes);
 
-        // Enviar el PDF al cliente
-        res.download(outputFilePath, 'output.pdf', () => {
-            // Eliminar el archivo después de que se haya enviado
-            fs.unlinkSync(outputFilePath);
-        });
+        // Comprobación de longitud del archivo antes de enviarlo
+        console.log(`PDF generado, tamaño: ${pdfBytes.length} bytes`);
+
+        // Enviar el PDF directamente en la respuesta
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="output.pdf"');
+        res.send(Buffer.from(pdfBytes));
+        
     } catch (err) {
-        console.error(err);
+        console.error('Error al generar el PDF:', err);
         res.status(500).send('Error al generar el PDF.');
     }
 });

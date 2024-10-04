@@ -3,90 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subida de Imágenes</title>
+    <title>Subir Imágenes y Generar PDF</title>
     <style>
         #progress-container {
             width: 100%;
             background-color: #f3f3f3;
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            display: none;
         }
 
         #progress-bar {
             width: 0%;
-            height: 20px;
+            height: 30px;
             background-color: #4caf50;
+            text-align: center;
+            line-height: 30px;
+            color: white;
         }
 
-        #progress-text {
-            text-align: center;
+        #status {
             margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>Subir Imágenes</h1>
-    <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" name="images" id="imageInput" multiple accept="image/*">
+    <h1>Subir imágenes para generar un PDF</h1>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="images" name="images" multiple>
         <button type="submit">Subir y Generar PDF</button>
     </form>
 
     <div id="progress-container">
-        <div id="progress-bar"></div>
+        <div id="progress-bar">0%</div>
     </div>
-    <div id="progress-text">0%</div>
+    <div id="status"></div>
 
     <script>
-        document.getElementById('uploadForm').addEventListener('submit', function (e) {
+        document.getElementById('upload-form').addEventListener('submit', async function (e) {
             e.preventDefault();
-            
-            const formData = new FormData();
-            const files = document.getElementById('imageInput').files;
 
+            const formData = new FormData();
+            const files = document.getElementById('images').files;
             for (let i = 0; i < files.length; i++) {
                 formData.append('images', files[i]);
             }
 
+            // Mostrar la barra de progreso
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-bar').innerText = '0%';
+            document.getElementById('status').innerText = 'Subiendo imágenes...';
+
+            // Subir los archivos y generar el PDF
             const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
 
-            // Actualizar la barra de progreso para la subida de archivos
-            xhr.upload.addEventListener('progress', function (e) {
-                if (e.lengthComputable) {
-                    const percentComplete = (e.loaded / e.total) * 100;
+            xhr.upload.onprogress = function (event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 50);  // 0-50% para la subida
                     document.getElementById('progress-bar').style.width = percentComplete + '%';
-                    document.getElementById('progress-text').innerText = Math.round(percentComplete) + '% Subido';
-                }
-            });
-
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    // Iniciar el progreso de la generación del PDF
-                    simulatePdfGenerationProgress();
-                    const link = document.createElement('a');
-                    link.href = '/output.pdf';
-                    link.download = 'output.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    document.getElementById('progress-bar').innerText = percentComplete + '%';
                 }
             };
 
-            xhr.open('POST', '/upload', true);
-            xhr.send(formData);
-        });
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == XMLHttpRequest.DONE) {
+                    if (xhr.status == 200) {
+                        document.getElementById('progress-bar').style.width = '100%';
+                        document.getElementById('progress-bar').innerText = '100%';
+                        document.getElementById('status').innerText = 'PDF generado. Descargando...';
 
-        // Simulación de progreso para la generación del PDF
-        function simulatePdfGenerationProgress() {
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 10;
-                document.getElementById('progress-bar').style.width = progress + '%';
-                document.getElementById('progress-text').innerText = progress + '% Generando PDF';
+                        // Crear un enlace temporal para descargar el PDF
+                        const blob = new Blob([xhr.response], { type: 'application/pdf' });
+                        const link = document.createElement('a');
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = 'output.pdf';
+                        link.click();
 
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    document.getElementById('progress-text').innerText = 'PDF Generado!';
+                        // Reiniciar barra de progreso
+                        document.getElementById('progress-bar').style.width = '0%';
+                        document.getElementById('progress-bar').innerText = '0%';
+                        document.getElementById('status').innerText = '';
+                    } else {
+                        document.getElementById('status').innerText = 'Error al generar el PDF.';
+                    }
                 }
-            }, 500); // Incremento simulado cada 500ms
-        }
+            };
+
+            xhr.responseType = 'blob';  // Recibir el PDF como blob
+            xhr.send(formData);
+
+            xhr.onloadstart = function () {
+                document.getElementById('status').innerText = 'Generando PDF...';
+            };
+
+            xhr.onprogress = function (event) {
+                if (event.lengthComputable) {
+                    const percentComplete = 50 + Math.round((event.loaded / event.total) * 50);  // 50-100% para la generación
+                    document.getElementById('progress-bar').style.width = percentComplete + '%';
+                    document.getElementById('progress-bar').innerText = percentComplete + '%';
+                }
+            };
+        });
     </script>
 </body>
 </html>
