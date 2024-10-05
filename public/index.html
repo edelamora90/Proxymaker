@@ -1,111 +1,63 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subir Imágenes y Generar PDF</title>
+    <title>Upload Images and Create PDF</title>
     <style>
-        #progress-container {
-            width: 100%;
-            background-color: #f3f3f3;
-            border: 1px solid #ddd;
-            margin: 20px 0;
-            display: none;
-        }
-
-        #progress-bar {
-            width: 0%;
-            height: 30px;
-            background-color: #4caf50;
+        body {
+            font-family: Arial, sans-serif;
             text-align: center;
-            line-height: 30px;
-            color: white;
         }
-
-        #status {
-            margin-top: 10px;
+        #uploadForm {
+            margin-top: 50px;
+        }
+        .preview img {
+            width: 100px;
+            height: auto;
+            margin: 5px;
         }
     </style>
 </head>
 <body>
-    <h1>Subir imágenes para generar un PDF</h1>
-    <form id="upload-form" enctype="multipart/form-data">
-        <input type="file" id="images" name="images" multiple>
-        <button type="submit">Subir y Generar PDF</button>
+    <h1>Subir Imágenes y Crear PDF</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="images" name="images" multiple accept="image/*">
+        <button type="button" onclick="uploadImages()">Subir y Crear PDF</button>
     </form>
-
-    <div id="progress-container">
-        <div id="progress-bar">0%</div>
-    </div>
-    <div id="status"></div>
+    <div class="preview" id="preview"></div>
 
     <script>
-        document.getElementById('upload-form').addEventListener('submit', async function (e) {
-            e.preventDefault();
+        function uploadImages() {
+            const images = document.getElementById('images').files;
 
-            const formData = new FormData();
-            const files = document.getElementById('images').files;
-            for (let i = 0; i < files.length; i++) {
-                formData.append('images', files[i]);
+            if (images.length === 0) {
+                alert('Debes subir al menos una imagen.');
+                return;
             }
 
-            // Mostrar la barra de progreso
-            document.getElementById('progress-container').style.display = 'block';
-            document.getElementById('progress-bar').style.width = '0%';
-            document.getElementById('progress-bar').innerText = '0%';
-            document.getElementById('status').innerText = 'Subiendo imágenes...';
+            const formData = new FormData();
+            for (let i = 0; i < images.length; i++) {
+                formData.append('images', images[i]);
+            }
 
-            // Subir los archivos y generar el PDF
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload', true);
-
-            xhr.upload.onprogress = function (event) {
-                if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 50);  // 0-50% para la subida
-                    document.getElementById('progress-bar').style.width = percentComplete + '%';
-                    document.getElementById('progress-bar').innerText = percentComplete + '%';
-                }
-            };
-
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState == XMLHttpRequest.DONE) {
-                    if (xhr.status == 200) {
-                        document.getElementById('progress-bar').style.width = '100%';
-                        document.getElementById('progress-bar').innerText = '100%';
-                        document.getElementById('status').innerText = 'PDF generado. Descargando...';
-
-                        // Crear un enlace temporal para descargar el PDF
-                        const blob = new Blob([xhr.response], { type: 'application/pdf' });
-                        const link = document.createElement('a');
-                        link.href = window.URL.createObjectURL(blob);
-                        link.download = 'output.pdf';
-                        link.click();
-
-                        // Reiniciar barra de progreso
-                        document.getElementById('progress-bar').style.width = '0%';
-                        document.getElementById('progress-bar').innerText = '0%';
-                        document.getElementById('status').innerText = '';
-                    } else {
-                        document.getElementById('status').innerText = 'Error al generar el PDF.';
-                    }
-                }
-            };
-
-            xhr.responseType = 'blob';  // Recibir el PDF como blob
-            xhr.send(formData);
-
-            xhr.onloadstart = function () {
-                document.getElementById('status').innerText = 'Generando PDF...';
-            };
-
-            xhr.onprogress = function (event) {
-                if (event.lengthComputable) {
-                    const percentComplete = 50 + Math.round((event.loaded / event.total) * 50);  // 50-100% para la generación
-                    document.getElementById('progress-bar').style.width = percentComplete + '%';
-                    document.getElementById('progress-bar').innerText = percentComplete + '%';
-                }
-            };
-        });
+            // Aquí insertas el código fetch para enviar las imágenes al servidor
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(new Blob([blob]));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'output.pdf';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(error => console.error('Error:', error));
+        }
     </script>
 </body>
 </html>
