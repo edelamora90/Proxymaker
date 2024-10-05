@@ -3,61 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Images and Create PDF</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-        #uploadForm {
-            margin-top: 50px;
-        }
-        .preview img {
-            width: 100px;
-            height: auto;
-            margin: 5px;
-        }
-    </style>
+    <title>Upload Progress</title>
 </head>
 <body>
-    <h1>Subir Imágenes y Crear PDF</h1>
+    <h1>Subida de Imágenes y Generación de PDF</h1>
     <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" id="images" name="images" multiple accept="image/*">
-        <button type="button" onclick="uploadImages()">Subir y Crear PDF</button>
+        <input type="file" name="images" multiple>
+        <button type="submit">Subir y generar PDF</button>
     </form>
-    <div class="preview" id="preview"></div>
 
+    <div id="progressContainer">
+        <progress id="progressBar" value="0" max="100"></progress>
+        <span id="progressStatus">Esperando...</span>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        function uploadImages() {
-            const images = document.getElementById('images').files;
+        const socket = io();
+        const progressBar = document.getElementById('progressBar');
+        const progressStatus = document.getElementById('progressStatus');
 
-            if (images.length === 0) {
-                alert('Debes subir al menos una imagen.');
-                return;
-            }
+        socket.on('progress', (data) => {
+            progressBar.value = data.percent;
+            progressStatus.innerText = `${data.percent}% - ${data.status}`;
+        });
 
-            const formData = new FormData();
-            for (let i = 0; i < images.length; i++) {
-                formData.append('images', images[i]);
-            }
-
-            // Aquí insertas el código fetch para enviar las imágenes al servidor
-            fetch('/upload', {
+        document.getElementById('uploadForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const response = await fetch('/upload', {
                 method: 'POST',
                 body: formData
-            })
-            .then(response => response.blob())
-            .then(blob => {
-                const url = window.URL.createObjectURL(new Blob([blob]));
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'output.pdf';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            })
-            .catch(error => console.error('Error:', error));
-        }
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const link = document.createElement('a');
+                link.href = window.URL.createObjectURL(blob);
+                link.download = 'output.pdf';
+                link.click();
+            } else {
+                progressStatus.innerText = 'Error al generar el PDF';
+            }
+        });
     </script>
 </body>
 </html>
