@@ -4,8 +4,12 @@ const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
 const path = require('path');
+const http = require('http');
+const socketIo = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
 const port = 3000;
 
 // Servir archivos estáticos desde la carpeta 'public'
@@ -36,16 +40,12 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
         // Crear un nuevo documento PDF
         const pdfDoc = await PDFDocument.create();
 
-        // Aumentar el DPI para mejorar la calidad (300 DPI)
         const dpi = 300;
         const pointsPerInch = dpi;
-
-        // Tamaño de página en puntos (19x13 pulgadas a 300 DPI)
         const pageWidth = 19 * pointsPerInch;
         const pageHeight = 13 * pointsPerInch;
 
-        // Configuración de imágenes
-        const imageWidth = (6.35 / 2.54) * pointsPerInch;  // Convertir cm a puntos (300 DPI)
+        const imageWidth = (6.35 / 2.54) * pointsPerInch;
         const imageHeight = (8.8 / 2.54) * pointsPerInch;
         const spacing = (0.4 / 25.4) * pointsPerInch;
 
@@ -55,16 +55,18 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
 
         const totalImageWidth = (imagesPerRow * imageWidth) + ((imagesPerRow - 1) * spacing);
         const totalImageHeight = (rowsPerPage * imageHeight) + ((rowsPerPage - 1) * spacing);
-
         const marginX = (pageWidth - totalImageWidth) / 2;
         const marginY = (pageHeight - totalImageHeight) / 2;
 
         let xOffset = marginX;
         let yOffset = pageHeight - marginY - imageHeight;
 
+        // Emitir progreso inicial (0%)
+        io.emit('progress', { percent: 0, status: 'Iniciando la creación del PDF...' });
+
         for (let i = 0; i < req.files.length; i++) {
             if (i % totalImagesPerPage === 0) {
-                const page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pdfDoc.addPage([pageWidth, pageHeight]);
                 xOffset = marginX;
                 yOffset = pageHeight - marginY - imageHeight;
             }
@@ -94,21 +96,32 @@ app.post('/upload', upload.array('images', 200), async (req, res) => {
                 xOffset = marginX;
                 yOffset -= imageHeight + spacing;
             }
+
+            // Emitir progreso
+            const progress = Math.round(((i + 1) / req.files.length) * 100);
+            io.emit('progress', { percent: progress, status: `Procesando imagen ${i + 1} de ${req.files.length}` });
         }
 
-        const pdfBytes = await pdfDoc.save();
+        // Emitir progreso del 100%
+        io.emit('progress', { percent: 100, status: 'PDF generado, comenzando descarga...' });
 
-        // Enviar el PDF como respuesta
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(Buffer.from(pdfBytes));
+        // Transmitir el PDF directamente al cliente
+        const pdfBytes = await pdfDoc.save();
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="output.pdf"',
+            'Content-Length': pdfBytes.length
+        });
+
+        res.send(Buffer.from(pdfBytes)); // Enviar los bytes directamente al cliente
 
     } catch (err) {
-        console.error('Error al generar el PDF:', err);
+        console.error(err);
         res.status(500).send('Error al generar el PDF.');
     }
 });
 
 // Iniciar el servidor
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Servidor corriendo en http://localhost:${port}`);
 });
